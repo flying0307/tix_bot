@@ -972,6 +972,163 @@ def tixcraft_date_auto_select(driver, url, config_dict):
                 print("date keyword:", date_keyword)
         check_game_detail = True
 
+    # 检查是否存在新版的日期下拉框
+    dateSearchGameList_element = None
+    try:
+        dateSearchGameList_element = driver.find_element(By.ID, 'dateSearchGameList')
+        if show_debug_message:
+            print("发现新版日期下拉框 dateSearchGameList")
+    except Exception as exc:
+        if show_debug_message:
+            print("未找到新版日期下拉框，将使用旧版日期选择方式")
+    
+    # 如果找到下拉框形式的日期选择器，使用Select处理
+    if dateSearchGameList_element is not None:
+        try:
+            # 使用Select类来处理下拉框
+            from selenium.webdriver.support.ui import Select
+            date_select = Select(dateSearchGameList_element)
+            
+            # 获取所有可选项
+            options = date_select.options
+            if show_debug_message:
+                print(f"日期下拉框中有 {len(options)} 个选项")
+            
+            if len(options) <= 1:
+                if show_debug_message:
+                    print("日期下拉框没有有效选项，不执行选择")
+                return False
+            
+            # 筛选掉第一个"请选择日期"的选项
+            valid_options = options[1:]
+            
+            # 根据条件选择
+            target_option = None
+            
+            # 如果有关键词，先按关键词匹配
+            if len(date_keyword) > 0:
+                for option in valid_options:
+                    if date_keyword in option.text:
+                        target_option = option
+                        if show_debug_message:
+                            print(f"找到匹配关键词的日期: {option.text}")
+                        break
+            
+            # 如果没有关键词或没有匹配项，按模式选择
+            if target_option is None:
+                if date_auto_select_mode == CONST_FROM_TOP_TO_BOTTOM:
+                    target_option = valid_options[0]
+                elif date_auto_select_mode == CONST_FROM_BOTTOM_TO_TOP:
+                    target_option = valid_options[-1]
+                elif date_auto_select_mode == CONST_RANDOM:
+                    target_option = valid_options[random.randint(0, len(valid_options)-1)]
+                else:
+                    target_option = valid_options[0]
+                
+                if show_debug_message:
+                    print(f"按照模式选择日期: {target_option.text}")
+            
+            # 选择目标选项
+            if target_option is not None:
+                try:
+                    # 记录选项值
+                    option_value = target_option.get_attribute("value")
+                    
+                    # 直接使用select_by_value选择
+                    date_select.select_by_value(option_value)
+                    
+                    if show_debug_message:
+                        print(f"已选择日期: {target_option.text}, 值: {option_value}")
+                    
+                    # 等待页面反应
+                    time.sleep(1)
+                    
+                    # 检查选择是否生效，可能需要点击确认按钮
+                    try:
+                        confirm_button = driver.find_element(By.CSS_SELECTOR, '.btn-primary[type="submit"]')
+                        if confirm_button and confirm_button.is_displayed() and confirm_button.is_enabled():
+                            confirm_button.click()
+                            if show_debug_message:
+                                print("已点击确认按钮")
+                    except:
+                        pass
+                    
+                    # 等待页面加载，查找"立即訂購"按钮
+                    time.sleep(1.5)
+                    try:
+                        # 尝试多种选择器查找"立即訂購"按钮
+                        purchase_buttons = driver.find_elements(By.CSS_SELECTOR, '.btn.btn-primary')
+                        if not purchase_buttons:
+                            purchase_buttons = driver.find_elements(By.CSS_SELECTOR, 'button.btn-primary')
+                        if not purchase_buttons:
+                            purchase_buttons = driver.find_elements(By.CSS_SELECTOR, 'button[data-href]')
+                            
+                        if show_debug_message:
+                            print(f"找到 {len(purchase_buttons)} 个可能的购买按钮")
+                            
+                        purchase_button = None
+                        for btn in purchase_buttons:
+                            try:
+                                btn_text = btn.text.strip()
+                                if show_debug_message:
+                                    print(f"按钮文本: '{btn_text}'")
+                                if "立即訂購" in btn_text:
+                                    purchase_button = btn
+                                    break
+                            except:
+                                continue
+                                
+                        if purchase_button:
+                            if show_debug_message:
+                                print("找到'立即訂購'按钮，准备点击")
+                            
+                            # 确保按钮在视图中
+                            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", purchase_button)
+                            time.sleep(0.5)
+                            
+                            # 尝试点击
+                            try:
+                                purchase_button.click()
+                                if show_debug_message:
+                                    print("成功点击'立即訂購'按钮")
+                            except Exception as e:
+                                if show_debug_message:
+                                    print(f"普通点击失败，尝试JS点击: {e}")
+                                # 如果普通点击失败，尝试JS点击
+                                try:
+                                    driver.execute_script("arguments[0].click();", purchase_button)
+                                    if show_debug_message:
+                                        print("JS点击成功")
+                                except Exception as e2:
+                                    print(f"JS点击也失败: {e2}")
+                                    
+                                    # 尝试处理data-href属性
+                                    try:
+                                        href = purchase_button.get_attribute('data-href')
+                                        if href and href.startswith('http'):
+                                            if show_debug_message:
+                                                print(f"尝试通过data-href直接导航到: {href}")
+                                            driver.get(href)
+                                    except Exception as e3:
+                                        print(f"通过data-href导航失败: {e3}")
+                        else:
+                            if show_debug_message:
+                                print("未找到'立即訂購'按钮")
+                    except Exception as e:
+                        if show_debug_message:
+                            print(f"查找'立即訂購'按钮时发生错误: {e}")
+                    
+                    return True
+                except Exception as e:
+                    print(f"选择日期时发生错误: {e}")
+                    return False
+            
+            return False
+        except Exception as e:
+            print(f"处理日期下拉框时发生错误: {e}")
+            return False
+    
+    # 以下是旧版本日期选择代码
     date_list = None
     if check_game_detail:
         try:
@@ -1246,15 +1403,48 @@ def tixcraft_area_auto_select(driver, url, config_dict):
     if show_debug_message:
         print("area_keyword_1, area_keyword_2:", area_keyword_1, area_keyword_2)
         print("area_keyword_3, area_keyword_4:", area_keyword_3, area_keyword_4)
-
+    
+    # 首先尝试查找"立即訂購"按钮 - 这适用于所有页面类型
+    purchase_button = find_and_click_purchase_button(driver, show_debug_message)
+    if purchase_button:
+        # 如果成功找到并点击了按钮，就不需要进行后续的区域选择了
+        return
+        
+    # 检查是否是区域选择页面（支持多种URL格式）
+    is_area_page = False
     if '/ticket/area/' in url:
+        is_area_page = True
+    
+    # 处理区域选择页面
+    if is_area_page:
         #driver.switch_to.default_content()
 
         el = None
         try:
+            # 尝试查找区域容器
             el = driver.find_element(By.CSS_SELECTOR, '.zone')
         except Exception as exc:
-            print("find .zone fail, do nothing.")
+            print("find .zone fail, trying alternative selectors")
+            try:
+                # 尝试使用其他选择器
+                alternative_selectors = [
+                    '.area-list', 
+                    '.area-wrap', 
+                    '[class*="area"]', 
+                    '.ticket-area',
+                    '.zone-list'
+                ]
+                for selector in alternative_selectors:
+                    try:
+                        el = driver.find_element(By.CSS_SELECTOR, selector)
+                        if el:
+                            if show_debug_message:
+                                print(f"找到区域容器使用选择器: {selector}")
+                            break
+                    except:
+                        continue
+            except Exception as exc:
+                print("find alternative area container fail, do nothing.")
 
         if el is not None:
             is_need_refresh, areas = get_tixcraft_target_area(el, area_keyword_1, area_auto_select_mode, pass_1_seat_remaining_enable)
@@ -1317,10 +1507,18 @@ def tixcraft_area_auto_select(driver, url, config_dict):
                 try:
                     #print("area text:", area_target.text)
                     area_target.click()
+                    # 点击后等待片刻，以便可能出现的"立即訂購"按钮加载
+                    time.sleep(1.5)
+                    # 再次尝试查找并点击"立即訂購"按钮
+                    find_and_click_purchase_button(driver, show_debug_message)
                 except Exception as exc:
                     print("click area a link fail, start to retry...")
                     try:
                         driver.execute_script("arguments[0].click();", area_target)
+                        # 点击后等待片刻，以便可能出现的"立即訂購"按钮加载
+                        time.sleep(1.5)
+                        # 再次尝试查找并点击"立即訂購"按钮
+                        find_and_click_purchase_button(driver, show_debug_message)
                     except Exception as exc:
                         print("click area a link fail, after reftry still fail.")
                         print(exc)
@@ -1328,49 +1526,124 @@ def tixcraft_area_auto_select(driver, url, config_dict):
 
             # auto refresh for area list page.
             if is_need_refresh:
+                # 在刷新前最后尝试一次查找"立即訂購"按钮
+                if not find_and_click_purchase_button(driver, show_debug_message):
+                    try:
+                        driver.refresh()
+                    except Exception as exc:
+                        pass
+
+# 辅助函数：查找并点击"立即訂購"按钮
+def find_and_click_purchase_button(driver, show_debug_message=False):
+    """
+    在页面上查找并点击"立即訂購"按钮
+    
+    Parameters:
+    driver - Selenium WebDriver实例
+    show_debug_message - 是否显示调试信息
+    
+    Returns:
+    bool - 是否找到并成功点击按钮
+    """
+    try:
+        # 添加等待，让页面完全加载
+        time.sleep(0.5)
+        
+        # 尝试多种选择器查找"立即訂購"按钮
+        button_selectors = [
+            "button.btn.btn-primary",
+            "button.btn-primary",
+            "a.btn.btn-primary",
+            ".btn-primary",
+            "button[data-href]",
+            "button",
+            "a.btn"
+        ]
+        
+        purchase_buttons = []
+        for selector in button_selectors:
+            try:
+                buttons = driver.find_elements(By.CSS_SELECTOR, selector)
+                if show_debug_message:
+                    print(f"使用选择器 {selector} 找到 {len(buttons)} 个按钮")
+                
+                if buttons:
+                    purchase_buttons.extend(buttons)
+            except:
+                continue
+        
+        if show_debug_message:
+            print(f"总共找到 {len(purchase_buttons)} 个潜在按钮")
+        
+        purchase_button = None
+        for btn in purchase_buttons:
+            try:
+                if not btn.is_displayed() or not btn.is_enabled():
+                    continue
+                    
+                # 获取按钮文本和属性
+                btn_text = btn.text.strip()
+                data_href = btn.get_attribute("data-href") or ""
+                
+                if show_debug_message:
+                    print(f"按钮文本: '{btn_text}', data-href: '{data_href}'")
+                
+                # 检查是否是目标按钮
+                if "立即訂購" in btn_text or "立即订购" in btn_text:
+                    purchase_button = btn
+                    break
+                
+                # 检查data-href属性中是否包含area
+                if "/ticket/area/" in data_href:
+                    purchase_button = btn
+                    break
+            except:
+                continue
+        
+        if purchase_button:
+            if show_debug_message:
+                print("找到'立即訂購'按钮，准备点击")
+            
+            # 确保按钮在视图中
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", purchase_button)
+            time.sleep(0.5)
+            
+            try:
+                # 先尝试普通点击
+                purchase_button.click()
+                if show_debug_message:
+                    print("成功点击'立即訂購'按钮")
+                return True
+            except Exception as e:
+                if show_debug_message:
+                    print(f"普通点击失败，尝试JS点击: {e}")
+                # 如果普通点击失败，尝试JS点击
                 try:
-                    driver.refresh()
-                except Exception as exc:
-                    pass
-
-'''
-        el_selectSeat_iframe = None
-        try:
-            el_selectSeat_iframe = driver.find_element_by_xpath("//iframe[contains(@src,'/ticket/selectSeat/')]")
-        except Exception as exc:
-            #print("find seat iframe fail")
-            pass
-
-        if el_selectSeat_iframe is not None:
-            driver.switch_to.frame(el_selectSeat_iframe)
-
-            # click one seat
-            el_seat = None
-            try:
-                el_seat = driver.find_element(By.CSS_SELECTOR, '.empty')
-                if el_seat is not None:
+                    driver.execute_script("arguments[0].click();", purchase_button)
+                    if show_debug_message:
+                        print("JS点击成功")
+                    return True
+                except Exception as e2:
+                    if show_debug_message:
+                        print(f"JS点击也失败: {e2}")
+                    
+                    # 尝试通过data-href属性直接导航
                     try:
-                        el_seat.click()
-                    except Exception as exc:
-                        #print("click area button fail")
-                        pass
-            except Exception as exc:
-                print("find empty seat fail")
-
-
-            # click submit button
-            el_confirm_seat = None
-            try:
-                el_confirm_seat = driver.find_element(By.ID, 'submitSeat')
-                if el_confirm_seat is not None:
-                    try:
-                        el_confirm_seat.click()
-                    except Exception as exc:
-                        #print("click area button fail")
-                        pass
-            except Exception as exc:
-                print("find submitSeat fail")
-'''
+                        href = purchase_button.get_attribute("data-href")
+                        if href and (href.startswith("http") or href.startswith("/")):
+                            if show_debug_message:
+                                print(f"尝试通过data-href直接导航到: {href}")
+                            driver.get(href)
+                            return True
+                    except Exception as e3:
+                        if show_debug_message:
+                            print(f"通过data-href导航失败: {e3}")
+        
+        return False
+    except Exception as e:
+        if show_debug_message:
+            print(f"查找'立即訂購'按钮时发生错误: {e}")
+        return False
 
 def tixcraft_ticket_agree(driver):
     click_plan = "A"
@@ -4889,18 +5162,52 @@ def play_mp3_async(sound_filename):
     threading.Thread(target=play_mp3, args=(sound_filename,), daemon=True).start()
 
 def play_mp3(sound_filename):
-    from playsound import playsound
+    # 尝试使用不同的音频播放方法
     try:
-        playsound(sound_filename)
-    except Exception as exc:
-        msg=str(exc)
-        print("play sound exeption:", msg)
+        # 先尝试使用playsound
+        try:
+            from playsound import playsound
+            playsound(sound_filename)
+            return
+        except ImportError:
+            print("playsound模块未安装，尝试使用其他方法播放声音...")
+        except Exception as exc:
+            msg=str(exc)
+            print("play sound exception using playsound:", msg)
+            
+        # 如果playsound失败，尝试使用系统特定的方法
         if platform.system() == 'Windows':
-            import winsound
             try:
+                import winsound
                 winsound.PlaySound(sound_filename, winsound.SND_FILENAME)
-            except Exception as exc2:
-                pass
+                return
+            except Exception as exc:
+                print("Windows winsound播放失败:", exc)
+                
+        elif platform.system() == 'Darwin':  # macOS
+            try:
+                import subprocess
+                subprocess.call(["afplay", sound_filename])
+                return
+            except Exception as exc:
+                print("macOS afplay播放失败:", exc)
+                
+        elif platform.system() == 'Linux':
+            try:
+                import subprocess
+                subprocess.call(["play", sound_filename])
+                return
+            except Exception as exc:
+                try:
+                    # 尝试使用aplay
+                    subprocess.call(["aplay", sound_filename])
+                    return
+                except Exception as exc2:
+                    print("Linux音频播放失败:", exc, exc2)
+        
+        print("所有音频播放方法失败，请安装playsound模块: pip install playsound")
+    except Exception as exc:
+        print("播放音频时发生未知错误:", exc)
 
 # purpose: check alert poped.
 # PS: current version not enable...
@@ -4969,7 +5276,8 @@ def tixcraft_main(driver, url, config_dict, is_verifyCode_editing, ocr):
             is_date_selected = tixcraft_date_auto_select(driver, url, config_dict)
 
     # choose area
-    if '/ticket/area/' in url:
+    # 使用正则表达式匹配所有可能的票券区域URL格式
+    if re.search(r'/ticket/area/', url):
         area_auto_select_enable = config_dict["tixcraft"]["area_auto_select"]["enable"]
         if area_auto_select_enable:
             tixcraft_area_auto_select(driver, url, config_dict)
