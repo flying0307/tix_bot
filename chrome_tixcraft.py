@@ -1041,7 +1041,7 @@ def tixcraft_date_auto_select(driver, url, config_dict):
                         print(f"已选择日期: {target_option.text}, 值: {option_value}")
                     
                     # 等待页面反应
-                    time.sleep(1)
+                    # time.sleep(1)
                     
                     # 检查选择是否生效，可能需要点击确认按钮
                     try:
@@ -1054,7 +1054,7 @@ def tixcraft_date_auto_select(driver, url, config_dict):
                         pass
                     
                     # 等待页面加载，查找"立即訂購"按钮
-                    time.sleep(1.5)
+                    # time.sleep(1.5)
                     try:
                         # 尝试多种选择器查找"立即訂購"按钮
                         purchase_buttons = driver.find_elements(By.CSS_SELECTOR, '.btn.btn-primary')
@@ -1084,7 +1084,7 @@ def tixcraft_date_auto_select(driver, url, config_dict):
                             
                             # 确保按钮在视图中
                             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", purchase_button)
-                            time.sleep(0.5)
+                            # time.sleep(0.5)
                             
                             # 尝试点击
                             try:
@@ -1508,7 +1508,7 @@ def tixcraft_area_auto_select(driver, url, config_dict):
                     #print("area text:", area_target.text)
                     area_target.click()
                     # 点击后等待片刻，以便可能出现的"立即訂購"按钮加载
-                    time.sleep(1.5)
+                    # time.sleep(1.5)
                     # 再次尝试查找并点击"立即訂購"按钮
                     find_and_click_purchase_button(driver, show_debug_message)
                 except Exception as exc:
@@ -1516,7 +1516,7 @@ def tixcraft_area_auto_select(driver, url, config_dict):
                     try:
                         driver.execute_script("arguments[0].click();", area_target)
                         # 点击后等待片刻，以便可能出现的"立即訂購"按钮加载
-                        time.sleep(1.5)
+                        # time.sleep(1.5)
                         # 再次尝试查找并点击"立即訂購"按钮
                         find_and_click_purchase_button(driver, show_debug_message)
                     except Exception as exc:
@@ -1547,7 +1547,7 @@ def find_and_click_purchase_button(driver, show_debug_message=False):
     """
     try:
         # 添加等待，让页面完全加载
-        time.sleep(0.5)
+        # time.sleep(0.5)
         
         # 尝试多种选择器查找"立即訂購"按钮
         button_selectors = [
@@ -1606,7 +1606,7 @@ def find_and_click_purchase_button(driver, show_debug_message=False):
             
             # 确保按钮在视图中
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", purchase_button)
-            time.sleep(0.5)
+            # time.sleep(0.5)
             
             try:
                 # 先尝试普通点击
@@ -1866,7 +1866,7 @@ def tixcraft_verify(driver, presale_code):
 
             if is_submited:
                 for i in range(3):
-                    time.sleep(0.1)
+                    # time.sleep(0.1)
                     alert_ret = check_pop_alert(driver)
                     if alert_ret:
                         if show_debug_message:
@@ -1997,7 +1997,7 @@ def tixcraft_auto_ocr(driver, ocr, ocr_captcha_with_submit, ocr_captcha_force_su
                     previous_answer = orc_answer
                     print("click captcha again")
                     tixcraft_reload_captcha(driver)
-                    time.sleep(0.3)
+                    # time.sleep(0.3)
     else:
         print("orc_answer is None")
         print("previous_answer:", previous_answer)
@@ -2098,7 +2098,7 @@ def kktix_events_press_next_button(driver):
     ret = False
 
     # let javascript to enable button.
-    time.sleep(0.1)
+    # time.sleep(0.1)
 
     wait = WebDriverWait(driver, 1)
     next_step_button = None
@@ -3109,7 +3109,7 @@ def kktix_reg_new_main(driver, answer_index, is_finish_checkbox_click, config_di
                             #print("focus() captcha to input.")
                             check_and_play_sound_for_captcha(config_dict)
                             captcha_password_input_tag.click()
-                            time.sleep(1)
+                            # time.sleep(1)
                             # let user to input answer, bot sleep 1 second.
                         except Exception as exc:
                             pass
@@ -3735,7 +3735,7 @@ def urbtix_date_auto_select(driver, auto_select_mode, date_keyword, auto_reload_
                 if len(formated_area_list) == 0:
                     try:
                         driver.refresh()
-                        time.sleep(1.0)
+                        # time.sleep(1.0)
                     except Exception as exc:
                         pass
 
@@ -4233,7 +4233,7 @@ def cityline_date_auto_select(driver, auto_select_mode, date_keyword, auto_reloa
                 if len(formated_area_list) == 0:
                     try:
                         driver.refresh()
-                        time.sleep(0.5)
+                        # time.sleep(0.5)
                     except Exception as exc:
                         pass
 
@@ -4783,7 +4783,7 @@ def ibon_date_auto_select(driver, auto_select_mode, date_keyword, auto_reload_co
                 if len(formated_area_list) == 0:
                     try:
                         driver.refresh()
-                        time.sleep(0.5)
+                        # time.sleep(0.5)
                     except Exception as exc:
                         pass
     return ret
@@ -5347,7 +5347,7 @@ def urbtix_main(driver, url, config_dict):
     for waiting_url in waiting_for_access_url:
         if waiting_url in url:
             # delay to avoid ip block.
-            time.sleep(1.0)
+            # time.sleep(1.0)
             try:
                 driver.get('https://www.urbtix.hk/')
             except Exception as exec1:
@@ -5517,7 +5517,7 @@ def main():
         pass
 
     while True:
-        time.sleep(0.1)
+        # time.sleep(0.1)
 
         is_alert_popup = False
 
