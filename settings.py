@@ -12,12 +12,14 @@ except ImportError:
     from tkinter import *
     from tkinter import ttk
     from tkinter import messagebox
+    import tkinter.messagebox
 import os
 import sys
 import platform
 import json
 import webbrowser
 import pyperclip
+import datetime
 
 CONST_APP_VERSION = u"MaxBot (2023.01.13)"
 
@@ -119,6 +121,7 @@ def load_translate():
     en_us["donate"] = 'Donate'
     en_us["help"] = 'Help'
     en_us["release"] = 'Release'
+    en_us["test_send"] = 'Test Send'
 
     zh_tw={}
     zh_tw["homepage"] = '售票網站'
@@ -158,12 +161,13 @@ def load_translate():
     zh_tw["advanced"] = '進階設定'
     zh_tw["about"] = '關於'
 
-    zh_tw["run"] = '搶票'
+    zh_tw["run"] = '啟動搶票'
     zh_tw["save"] = '存檔'
-    zh_tw["exit"] = '關閉'
+    zh_tw["exit"] = '離開'
     zh_tw["copy"] = '複製'
     zh_tw["restore_defaults"] = '恢復預設值'
     zh_tw["done"] = '完成'
+    zh_tw["test_send"] = '測試發送'
 
     zh_tw["facebook_account"] = 'Facebook 帳號'
     zh_tw["kktix_account"] = 'KKTIX 帳號'
@@ -178,18 +182,18 @@ def load_translate():
     zh_tw["save_login_status_memo"] = '保持Google等網站的登入狀態'
 
     zh_tw["line_notify_enable"] = 'LINE Notify 通知'
-    zh_tw["line_notify_token"] = 'LINE Notify 權杖'
+    zh_tw["line_notify_token"] = 'LINE Notify 訪問令牌'
     zh_tw["line_notify_message"] = '通知訊息'
 
     zh_tw["line_message_api_enable"] = 'LINE Messaging API (推薦)'
     zh_tw["line_message_api_channel_access_token"] = 'Channel Access Token'
-    zh_tw["line_message_api_user_id"] = '用戶ID / 群組ID'
+    zh_tw["line_message_api_user_id"] = '使用者ID / 群組ID'
     zh_tw["line_message_api_message"] = '通知訊息'
 
-    zh_tw["maxbot_slogan"] = 'MaxBot是一個免費、開放原始碼的搶票機器人。\n祝您搶票成功。'
+    zh_tw["maxbot_slogan"] = 'MaxBot 是一個免費的開源機器人程序。\n祝您搶票成功。'
     zh_tw["donate"] = '打賞'
-    zh_tw["release"] = '所有可用版本'
     zh_tw["help"] = '使用教學'
+    zh_tw["release"] = '所有可用版本'
 
     zh_cn={}
     zh_cn["homepage"] = '售票网站'
@@ -230,12 +234,13 @@ def load_translate():
     zh_cn["about"] = '关于'
     zh_cn["copy"] = '复制'
 
-    zh_cn["run"] = '抢票'
-    zh_cn["save"] = '存档'
-    zh_cn["exit"] = '关闭'
+    zh_cn["run"] = '启动抢票'
+    zh_cn["save"] = '存盘'
+    zh_cn["exit"] = '离开'
     zh_cn["copy"] = '复制'
     zh_cn["restore_defaults"] = '恢复默认值'
     zh_cn["done"] = '完成'
+    zh_cn["test_send"] = '测试发送'
 
     zh_cn["facebook_account"] = 'Facebook 帐号'
     zh_cn["kktix_account"] = 'KKTIX 帐号'
@@ -301,12 +306,13 @@ def load_translate():
     ja_jp["advanced"] = '高度な設定'
     ja_jp["about"] = '情報'
 
-    ja_jp["run"] = 'チケットを取る'
+    ja_jp["run"] = '実行'
     ja_jp["save"] = '保存'
     ja_jp["exit"] = '閉じる'
     ja_jp["copy"] = 'コピー'
     ja_jp["restore_defaults"] = 'デフォルトに戻す'
     ja_jp["done"] = '終わり'
+    ja_jp["test_send"] = 'テスト送信'
 
     ja_jp["facebook_account"] = 'Facebookのアカウント'
     ja_jp["kktix_account"] = 'KKTIXのアカウント'
@@ -600,11 +606,7 @@ def btn_save_act(language_code, slience_mode=False):
         
         # 验证并保存Channel Access Token
         channel_access_token = txt_line_message_api_token.get().strip()
-        if bool(chk_state_line_message_api.get()) and (len(channel_access_token) < 10 or not channel_access_token.isalnum()):
-            # 如果启用了LINE Messaging API但Token格式不正确，显示警告并禁用功能
-            messagebox.showwarning(translate[language_code]["save"], "LINE Messaging API Token格式不正确，将禁用此功能")
-            config_dict["line_message_api"]["enable"] = False
-            chk_state_line_message_api.set(False)
+
             
         config_dict["line_message_api"]["channel_access_token"] = channel_access_token
         
@@ -687,6 +689,103 @@ def btn_preview_sound_clicked():
     app_root = get_app_root()
     new_sound_filename = os.path.join(app_root, new_sound_filename)
     play_mp3_async(new_sound_filename)
+
+def btn_test_line_messaging_api_clicked(language_code):
+    # 导入tkinter.messagebox
+    from tkinter import messagebox
+    # 导入mac_tixcraft中的函数
+    from mac_tixcraft import send_line_notification
+    
+    # 获取Channel Access Token和User ID
+    line_message_api_token = txt_line_message_api_token.get().strip()
+    line_message_api_user_id = txt_line_message_api_user_id.get().strip()
+    
+    # 创建错误和成功消息的多语言版本
+    error_token_too_short = {
+        'zh_tw': "Channel Access Token 長度不足，請確保已正確填寫",
+        'zh_cn': "Channel Access Token 长度不足，请确保已正确填写",
+        'en_us': "Channel Access Token length is too short, please make sure it's correctly filled in",
+        'ja_jp': "Channel Access Tokenの長さが足りません、正しく入力されていることを確認してください"
+    }
+    
+    error_userid_too_short = {
+        'zh_tw': "User ID / Group ID 長度不足，請確保已正確填寫",
+        'zh_cn': "User ID / Group ID 长度不足，请确保已正确填写",
+        'en_us': "User ID / Group ID length is too short, please make sure it's correctly filled in",
+        'ja_jp': "User ID / Group IDの長さが足りません、正しく入力されていることを確認してください"
+    }
+    
+    success_message = {
+        'zh_tw': "測試訊息已成功發送！請在 LINE 應用中查看。",
+        'zh_cn': "测试消息已成功发送！请在 LINE 应用中查看。",
+        'en_us': "Test message has been sent successfully! Please check your LINE app.",
+        'ja_jp': "テストメッセージが正常に送信されました！LINEアプリで確認してください。"
+    }
+    
+    error_message = {
+        'zh_tw': "訊息發送失敗，請檢查設定和網絡連接。",
+        'zh_cn': "消息发送失败，请检查配置和网络连接。",
+        'en_us': "Message sending failed, please check your configuration and network connection.",
+        'ja_jp': "メッセージの送信に失敗しました。設定とネットワーク接続を確認してください。"
+    }
+    
+    exception_message = {
+        'zh_tw': "發送測試訊息時出現異常: ",
+        'zh_cn': "发送测试消息时出现异常: ",
+        'en_us': "Exception occurred when sending test message: ",
+        'ja_jp': "テストメッセージの送信中に例外が発生しました: "
+    }
+    
+    error_title = {
+        'zh_tw': "錯誤",
+        'zh_cn': "错误",
+        'en_us': "Error",
+        'ja_jp': "エラー"
+    }
+    
+    success_title = {
+        'zh_tw': "成功",
+        'zh_cn': "成功",
+        'en_us': "Success",
+        'ja_jp': "成功"
+    }
+    
+    # 获取当前语言设置
+    current_lang = language_code if language_code in error_token_too_short else 'en_us'
+    
+    # 验证参数
+    if len(line_message_api_token) < 30:
+        messagebox.showerror(error_title[current_lang], error_token_too_short[current_lang])
+        return
+    
+    if len(line_message_api_user_id) < 10:
+        messagebox.showerror(error_title[current_lang], error_userid_too_short[current_lang])
+        return
+    
+    # 创建多语言测试消息
+    test_messages = {
+        'zh_tw': "這是一條測試訊息，如果您收到了，說明 LINE Messaging API 配置正確。",
+        'zh_cn': "这是一条测试消息，如果您收到了，说明 LINE Messaging API 配置正确。",
+        'en_us': "This is a test message. If you received it, your LINE Messaging API configuration is correct.",
+        'ja_jp': "これはテストメッセージです。受信できた場合、LINE Messaging APIの設定は正しいです。"
+    }
+    
+    # 发送测试消息
+    try:
+        result = send_line_notification(
+            test_messages[current_lang],
+            None,  # 不使用 LINE Notify
+            True,  # 使用 LINE Messaging API
+            line_message_api_token,
+            line_message_api_user_id
+        )
+        
+        if result:
+            messagebox.showinfo(success_title[current_lang], success_message[current_lang])
+        else:
+            messagebox.showerror(error_title[current_lang], error_message[current_lang])
+    except Exception as e:
+        messagebox.showerror(error_title[current_lang], exception_message[current_lang] + str(e))
 
 def play_mp3_async(sound_filename):
     import threading
@@ -1982,20 +2081,37 @@ def AdvancedTab(root, config_dict, language_code, UI_PADDING_X):
 
     group_row_count +=1
     
+    # 添加LINE Messaging API測試按鈕
+    global btn_test_line_message_api
+    btn_test_line_message_api = ttk.Button(frame_group_header, text=translate[language_code]['test_send'], command=lambda: btn_test_line_messaging_api_clicked(language_code))
+    btn_test_line_message_api.grid(column=1, row=group_row_count, sticky = W)
+    
+    group_row_count +=1
+    
     # 添加LINE Messaging API说明
-    line_message_api_notice = Label(frame_group_header, text="LINE Notify将于2025年3月31日停止服务，建议改用LINE Messaging API", fg="red")
+    line_notify_end_message = {
+        'zh_tw': "LINE Notify將於2025年3月31日停止服務，建議改用LINE Messaging API",
+        'zh_cn': "LINE Notify将于2025年3月31日停止服务，建议改用LINE Messaging API",
+        'en_us': "LINE Notify will stop service on March 31, 2025. LINE Messaging API is recommended instead.",
+        'ja_jp': "LINE Notifyは2025年3月31日にサービスを終了します。LINE Messaging APIの使用をお勧めします。"
+    }
+    
+    line_message_api_notice = Label(frame_group_header, text=line_notify_end_message.get(language_code, line_notify_end_message['en_us']), fg="red")
     line_message_api_notice.grid(column=0, row=group_row_count, columnspan=2, sticky="ew")
     
     group_row_count +=1
     
     # 添加LINE Messaging API使用说明
-    line_message_api_help = Label(frame_group_header, text="请在LINE Developer Console获取Channel Access Token，长度应至少30个字符", fg="blue")
-    line_message_api_help.grid(column=0, row=group_row_count, columnspan=2, sticky="ew")
+    line_guide_message = {
+        'zh_tw': "獲取Channel Access Token和User ID指南:",
+        'zh_cn': "获取Channel Access Token和User ID指南:",
+        'en_us': "Guide to get Channel Access Token and User ID:",
+        'ja_jp': "Channel Access TokenとUser IDを取得するガイド:"
+    }
     
-    group_row_count +=1
-    
-    line_message_api_help2 = Label(frame_group_header, text="User ID为您的LINE用户ID或群组ID，可通过LINE Bot获取", fg="blue")
-    line_message_api_help2.grid(column=0, row=group_row_count, columnspan=2, sticky="ew")
+    line_message_api_help = Label(frame_group_header, text=line_guide_message.get(language_code, line_guide_message['en_us']), fg="blue", cursor="hand2")
+    line_message_api_help.grid(column=0, row=group_row_count, columnspan=2, sticky="w")
+    line_message_api_help.bind("<Button-1>", lambda e: open_url("https://developers.line.biz/en/docs/messaging-api/getting-started/"))
     
     group_row_count +=1
 
@@ -2004,44 +2120,44 @@ def AdvancedTab(root, config_dict, language_code, UI_PADDING_X):
     global lbl_donate
     global lbl_release
 
-    lbl_slogan = Label(frame_group_header, text=translate[language_code]['maxbot_slogan'], wraplength=400, justify="center")
-    lbl_slogan.grid(column=0, row=group_row_count, columnspan=2)
+    # lbl_slogan = Label(frame_group_header, text=translate[language_code]['maxbot_slogan'], wraplength=400, justify="center")
+    # lbl_slogan.grid(column=0, row=group_row_count, columnspan=2)
 
-    group_row_count +=1
+    # group_row_count +=1
 
-    lbl_help = Label(frame_group_header, text=translate[language_code]['help'])
-    lbl_help.grid(column=0, row=group_row_count, sticky = E)
+    # lbl_help = Label(frame_group_header, text=translate[language_code]['help'])
+    # lbl_help.grid(column=0, row=group_row_count, sticky = E)
 
-    lbl_help_url = Label(frame_group_header, text=URL_HELP, fg="blue", cursor="hand2")
-    lbl_help_url.grid(column=1, row=group_row_count, sticky = W)
-    lbl_help_url.bind("<Button-1>", lambda e: open_url(URL_HELP))
+    # lbl_help_url = Label(frame_group_header, text=URL_HELP, fg="blue", cursor="hand2")
+    # lbl_help_url.grid(column=1, row=group_row_count, sticky = W)
+    # lbl_help_url.bind("<Button-1>", lambda e: open_url(URL_HELP))
 
-    group_row_count +=1
+    # group_row_count +=1
 
-    lbl_donate = Label(frame_group_header, text=translate[language_code]['donate'])
-    lbl_donate.grid(column=0, row=group_row_count, sticky = E)
+    # lbl_donate = Label(frame_group_header, text=translate[language_code]['donate'])
+    # lbl_donate.grid(column=0, row=group_row_count, sticky = E)
 
-    lbl_donate_url = Label(frame_group_header, text=URL_DONATE, fg="blue", cursor="hand2")
-    lbl_donate_url.grid(column=1, row=group_row_count, sticky = W)
-    lbl_donate_url.bind("<Button-1>", lambda e: open_url(URL_DONATE))
+    # lbl_donate_url = Label(frame_group_header, text=URL_DONATE, fg="blue", cursor="hand2")
+    # lbl_donate_url.grid(column=1, row=group_row_count, sticky = W)
+    # lbl_donate_url.bind("<Button-1>", lambda e: open_url(URL_DONATE))
 
-    group_row_count +=1
+    # group_row_count +=1
 
-    lbl_release = Label(frame_group_header, text=translate[language_code]['release'])
-    lbl_release.grid(column=0, row=group_row_count, sticky = E)
+    # lbl_release = Label(frame_group_header, text=translate[language_code]['release'])
+    # lbl_release.grid(column=0, row=group_row_count, sticky = E)
 
-    lbl_release_url = Label(frame_group_header, text=URL_RELEASE, fg="blue", cursor="hand2")
-    lbl_release_url.grid(column=1, row=group_row_count, sticky = W)
-    lbl_release_url.bind("<Button-1>", lambda e: open_url(URL_RELEASE))
+    # lbl_release_url = Label(frame_group_header, text=URL_RELEASE, fg="blue", cursor="hand2")
+    # lbl_release_url.grid(column=1, row=group_row_count, sticky = W)
+    # lbl_release_url.bind("<Button-1>", lambda e: open_url(URL_RELEASE))
 
-    group_row_count +=1
+    # group_row_count +=1
 
-    lbl_fb_fans = Label(frame_group_header, text=u'Facebook')
-    lbl_fb_fans.grid(column=0, row=group_row_count, sticky = E)
+    # lbl_fb_fans = Label(frame_group_header, text=u'Facebook')
+    # lbl_fb_fans.grid(column=0, row=group_row_count, sticky = E)
 
-    lbl_fb_fans_url = Label(frame_group_header, text=URL_FB, fg="blue", cursor="hand2")
-    lbl_fb_fans_url.grid(column=1, row=group_row_count, sticky = W)
-    lbl_fb_fans_url.bind("<Button-1>", lambda e: open_url(URL_FB))
+    # lbl_fb_fans_url = Label(frame_group_header, text=URL_FB, fg="blue", cursor="hand2")
+    # lbl_fb_fans_url.grid(column=1, row=group_row_count, sticky = W)
+    # lbl_fb_fans_url.bind("<Button-1>", lambda e: open_url(URL_FB))
 
     frame_group_header.grid(column=0, row=row_count)
 

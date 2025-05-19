@@ -126,7 +126,7 @@ def get_chromedriver_path(webdriver_path):
         chromedriver_path = os.path.join(webdriver_path,"chromedriver.exe")
     return chromedriver_path
 
-def load_chromdriver_normal(webdriver_path, driver_type, adblock_plus_enable):
+def load_chromdriver_normal(webdriver_path, driver_type, adblock_plus_enable, save_login_status=False):
     chrome_options = webdriver.ChromeOptions()
 
     chromedriver_path = get_chromedriver_path(webdriver_path)
@@ -140,6 +140,20 @@ def load_chromdriver_normal(webdriver_path, driver_type, adblock_plus_enable):
             chrome_options.add_extension(no_google_analytics_path)
         if os.path.exists(no_ad_path):
             chrome_options.add_extension(no_ad_path)
+
+    # 如果啟用了保存登錄狀態，添加用戶數據目錄
+    if save_login_status:
+        app_root = get_app_root()
+        user_data_dir = os.path.join(app_root, "chrome_user_data")
+        if not os.path.exists(user_data_dir):
+            try:
+                os.makedirs(user_data_dir)
+            except Exception as e:
+                print(f"創建用戶數據目錄失敗: {e}")
+        
+        # 添加用戶數據目錄參數
+        chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
+        print(f"使用Chrome用戶數據目錄: {user_data_dir}")
 
     chrome_options.add_argument('--disable-features=TranslateUI')
     chrome_options.add_argument('--disable-translate')
@@ -183,7 +197,7 @@ def load_chromdriver_normal(webdriver_path, driver_type, adblock_plus_enable):
 
     return driver
 
-def load_chromdriver_uc(webdriver_path, adblock_plus_enable):
+def load_chromdriver_uc(webdriver_path, adblock_plus_enable, save_login_status=False):
     import undetected_chromedriver as uc
 
     chromedriver_path = get_chromedriver_path(webdriver_path)
@@ -204,6 +218,20 @@ def load_chromdriver_uc(webdriver_path, adblock_plus_enable):
             load_extension_path += "," + no_ad_folder_path
         if len(load_extension_path) > 0:
             options.add_argument('--load-extension=' + load_extension_path[1:])
+    
+    # 如果啟用了保存登錄狀態，添加用戶數據目錄
+    if save_login_status:
+        app_root = get_app_root()
+        user_data_dir = os.path.join(app_root, "chrome_user_data")
+        if not os.path.exists(user_data_dir):
+            try:
+                os.makedirs(user_data_dir)
+            except Exception as e:
+                print(f"創建用戶數據目錄失敗: {e}")
+        
+        # 添加用戶數據目錄參數
+        options.add_argument(f'--user-data-dir={user_data_dir}')
+        print(f"使用Chrome用戶數據目錄: {user_data_dir}")
 
     options.add_argument('--disable-features=TranslateUI')
     options.add_argument('--disable-translate')
@@ -399,11 +427,17 @@ def get_driver_by_config(config_dict, driver_type):
 
     adblock_plus_enable = config_dict["advanced"]["adblock_plus_enable"]
     print("adblock_plus_enable:", adblock_plus_enable)
+    
+    # 讀取保存登錄狀態設置
+    save_login_status = False
+    if 'save_login_status' in config_dict["advanced"]:
+        save_login_status = config_dict["advanced"]["save_login_status"]
+    print("save_login_status:", save_login_status)
 
     if browser == "chrome":
         # method 6: Selenium Stealth
         if driver_type != "undetected_chromedriver":
-            driver = load_chromdriver_normal(webdriver_path, driver_type, adblock_plus_enable)
+            driver = load_chromdriver_normal(webdriver_path, driver_type, adblock_plus_enable, save_login_status)
         else:
             # method 5: uc
             # multiprocessing not work bug.
@@ -411,7 +445,7 @@ def get_driver_by_config(config_dict, driver_type):
                 if hasattr(sys, 'frozen'):
                     from multiprocessing import freeze_support
                     freeze_support()
-            driver = load_chromdriver_uc(webdriver_path, adblock_plus_enable)
+            driver = load_chromdriver_uc(webdriver_path, adblock_plus_enable, save_login_status)
 
     if browser == "firefox":
         # default os is linux/mac
@@ -5252,6 +5286,57 @@ def check_pop_alert(driver):
 
     return is_alert_popup
 
+# purpose: detect payment page and send line notification
+def detect_payment_page(driver, url, config_dict):
+    """檢測是否進入支付頁面，如果是則發送通知"""
+    # 導入mac_tixcraft中的函數
+    from mac_tixcraft import send_line_notification_from_config
+    
+    # 使用全局变量记录已经发送过通知的URL
+    if not hasattr(detect_payment_page, 'notified_payment_urls'):
+        detect_payment_page.notified_payment_urls = set()
+    
+    is_payment_page = False
+    
+    # 检查URL是否为None，避免TypeError
+    if url is None:
+        return is_payment_page
+    
+    # TixCraft支付頁面檢測
+    if '/ticket/payment' in url:
+        is_payment_page = True
+    
+    # KKTIX支付頁面檢測
+    if '/registrations/new' in url and 'confirm' in url:
+        is_payment_page = True
+    
+    # FamiTicket支付頁面檢測
+    if '/order/confirm' in url:
+        is_payment_page = True
+    
+    # UrbtixHK支付頁面檢測
+    if '/payment' in url or '/checkout' in url:
+        is_payment_page = True
+    
+    # Cityline支付頁面檢測
+    if '/order/payment' in url:
+        is_payment_page = True
+    
+    # ibon支付頁面檢測
+    if '/PaymentList.html' in url:
+        is_payment_page = True
+    
+    # 仅当是支付页面且该URL没有发送过通知时才发送
+    if is_payment_page and url not in detect_payment_page.notified_payment_urls:
+        print("檢測到支付頁面，發送LINE通知...")
+        # 使用config中的支付頁面消息發送通知
+        send_line_notification_from_config("成功進入支付頁面！請盡快完成付款。", config_dict)
+        # 记录已发送通知的URL
+        detect_payment_page.notified_payment_urls.add(url)
+        print(f"已记录通知状态，此页面({url})不会重复发送通知")
+    
+    return is_payment_page
+
 def list_all_cookies(driver):
     all_cookies=driver.get_cookies();
     cookies_dict = {}
@@ -5292,6 +5377,9 @@ def tixcraft_main(driver, url, config_dict, is_verifyCode_editing, ocr):
             is_verifyCode_editing = tixcraft_ticket_main(driver, config_dict, ocr)
     else:
         is_verifyCode_editing = False
+    
+    # 檢測支付頁面
+    detect_payment_page(driver, url, config_dict)
 
     return is_verifyCode_editing
 
@@ -5324,6 +5412,10 @@ def kktix_main(driver, url, config_dict, answer_index, kktix_register_status_las
 
             answer_index = -1
             kktix_register_status_last = None
+    
+    # 檢測支付頁面
+    detect_payment_page(driver, url, config_dict)
+    
     return answer_index, kktix_register_status_last
 
 def famiticket_main(driver, url, config_dict):
@@ -5340,6 +5432,9 @@ def famiticket_main(driver, url, config_dict):
         fami_activity(driver)
     if '/Sales/Home/Index/' in url:
         fami_home(driver, url, config_dict)
+    
+    # 檢測支付頁面
+    detect_payment_page(driver, url, config_dict)
 
 def urbtix_main(driver, url, config_dict):
     # http://msg.urbtix.hk
@@ -5363,25 +5458,13 @@ def urbtix_main(driver, url, config_dict):
 
     # https://www.urbtix.hk/event-detail/00000/
     if '/event-detail/' in url:
-        date_auto_select_enable = config_dict["tixcraft"]["date_auto_select"]["enable"]
-        if date_auto_select_enable:
-            is_event_page = False
-            if len(url.split('/'))<=6:
-                is_event_page = True
-            urbtix_purchase_ticket(driver, config_dict)
-
-    # https://www.urbtix.hk/performance-detail/?eventId=00000&performanceId=00000
-    is_performace_page = False
-    if '/performance-detail/?eventId=' in url:
-        is_performace_page = True
-
-    if 'performance-detail?eventId' in url:
-        is_performace_page = True
-
-    if is_performace_page:
-        area_auto_select_enable = config_dict["tixcraft"]["area_auto_select"]["enable"]
-        if area_auto_select_enable:
+        try:
             urbtix_performance(driver, config_dict)
+        except Exception as exc:
+            pass
+    
+    # 檢測支付頁面
+    detect_payment_page(driver, url, config_dict)
 
 def check_modal_dialog_popup(driver):
     ret = False
@@ -5408,74 +5491,38 @@ def check_modal_dialog_popup(driver):
 def cityline_main(driver, url, config_dict):
     # https://www.cityline.com/Login.html?targetUrl=https%3A%2F%2F
     # ignore url redirect
-    if '/Login.html' in url:
-        return
+    if 'Login.html' in url:
+        print("wait for login")
 
-    # https://msg.cityline.com/
-    if 'msg.cityline.com' in url:
+    #https://event.cityline.com/
+    if 'event.cityline.com' in url:
         try:
-            driver.execute_script("goEvent();")
-        except Exception as exec1:
+            cityline_performance(driver, config_dict)
+        except Exception as exc:
             pass
-        pass
-
-    try:
-        window_handles_count = len(driver.window_handles)
-        if window_handles_count > 1:
-            driver.switch_to.window(driver.window_handles[0])
-            driver.close()
-            driver.switch_to.window(driver.window_handles[0])
-    except Exception as excSwithFail:
-        pass
-
-    if '/eventDetail?' in url:
-        is_modal_dialog_popup = check_modal_dialog_popup(driver)
-        if is_modal_dialog_popup:
-            print("is_modal_dialog_popup! skip...")
-        else:
-            date_auto_select_enable = config_dict["tixcraft"]["date_auto_select"]["enable"]
-            if date_auto_select_enable:
-                cityline_purchase_button_press(driver, config_dict)
-
-    if '/performance?' in url:
-        is_modal_dialog_popup = check_modal_dialog_popup(driver)
-        if is_modal_dialog_popup:
-            print("is_modal_dialog_popup! skip...")
-        else:
-            area_auto_select_enable = config_dict["tixcraft"]["area_auto_select"]["enable"]
-            if area_auto_select_enable:
-                cityline_performance(driver, config_dict)
+    
+    # 檢測支付頁面
+    detect_payment_page(driver, url, config_dict)
 
 def ibon_main(driver, url, config_dict):
     #https://ticket.ibon.com.tw/ActivityInfo/Details/0000?pattern=entertainment
-    if '/ActivityInfo/Details/' in url:
-        is_event_page = False
-        if len(url.split('/'))<=6:
-            is_event_page = True
+    url_split = url.split("/")
+    if len(url_split) >= 4:
+        #print("url_split[3]:", url_split[3])
+        if url_split[3] == "ActivityInfo":
+            if len(url_split) >= 5:
+                if "Detail" in url_split[4]:
+                    ibon_activity_info(driver, config_dict)
 
-        if is_event_page:
-            date_auto_select_enable = config_dict["tixcraft"]["date_auto_select"]["enable"]
-            if date_auto_select_enable:
-                ibon_activity_info(driver, config_dict)
-
-    # https://orders.ibon.com.tw/application/UTK02/UTK0201_000.aspx?PERFORMANCE_ID=0000
-    if '/application/UTK02/' in url and '.aspx?PERFORMANCE_ID=' in url:
-        is_event_page = False
-        if len(url.split('/'))<=6:
-            is_event_page = True
-
-        if is_event_page:
-            area_auto_select_enable = config_dict["tixcraft"]["area_auto_select"]["enable"]
-            if area_auto_select_enable:
-                if 'PERFORMANCE_PRICE_AREA_ID=' in url:
-                    # step 2: assign ticket number.
-                    ticket_number = str(config_dict["ticket_number"])
-                    is_ticket_number_assigned = ibon_ticket_number_auto_select(driver, ticket_number)
-                    if is_ticket_number_assigned:
-                        click_ret = ibon_purchase_button_press(driver)
-                else:
-                    # step 1: select area.
+        if url_split[3] == "Home":
+            # https://ticket.ibon.com.tw/Home/Index/00000
+            if len(url_split) >= 5:
+                if url_split[4] == "Index":
+                    # https://ticket.ibon.com.tw/Home/index/00000
                     ibon_performance(driver, config_dict)
+    
+    # 檢測支付頁面
+    detect_payment_page(driver, url, config_dict)
 
 def main():
     config_dict = get_config_dict()
@@ -5515,6 +5562,9 @@ def main():
             ocr = ddddocr.DdddOcr(show_ad=False, beta=True)
     except Exception as exc:
         pass
+    
+    # 記錄已通知的URL，避免重複發送通知
+    notified_urls = set()
 
     while True:
         # time.sleep(0.1)
@@ -5536,6 +5586,13 @@ def main():
         url = ""
         try:
             url = driver.current_url
+            
+            # 檢查是否為新的URL，如果是新URL並且是支付頁面，則檢測並發送通知
+            if url not in notified_urls:
+                is_payment_page = detect_payment_page(driver, url, config_dict)
+                if is_payment_page:
+                    notified_urls.add(url)  # 添加到已通知集合，避免重複通知
+            
         except NoSuchWindowException:
             print('NoSuchWindowException at this url:', url )
             #print("last_url:", last_url)
